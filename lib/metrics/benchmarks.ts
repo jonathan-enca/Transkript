@@ -172,7 +172,7 @@ export async function getBenchmarks() {
   const allBenchmarks = await db.select().from(benchmarks);
 
   const benchmarkMap = allBenchmarks.reduce(
-    (acc, b) => {
+    (acc: any, b: any) => {
       acc[b.metricName] = b;
       return acc;
     },
