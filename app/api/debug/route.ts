@@ -22,12 +22,29 @@ export async function GET() {
     const sampleAds = await db.select().from(ads).limit(3);
     const sampleMetrics = await db.select().from(dailyMetrics).limit(10);
 
+    // Get date range of metrics
+    const dateRange = await db.select({
+      minDate: sql<string>`MIN(date)`,
+      maxDate: sql<string>`MAX(date)`,
+    }).from(dailyMetrics);
+
+    // Get metrics count by date (top 10)
+    const metricsByDate = await db.select({
+      date: dailyMetrics.date,
+      count: sql<number>`count(*)`,
+    }).from(dailyMetrics)
+      .groupBy(dailyMetrics.date)
+      .orderBy(sql`date DESC`)
+      .limit(10);
+
     return NextResponse.json({
       counts: {
         accounts: accountsCount[0]?.count || 0,
         ads: adsCount[0]?.count || 0,
         metrics: metricsCount[0]?.count || 0,
       },
+      dateRange: dateRange[0] || null,
+      metricsByDate,
       samples: {
         accounts: sampleAccounts,
         ads: sampleAds.map((ad: Ad) => ({
