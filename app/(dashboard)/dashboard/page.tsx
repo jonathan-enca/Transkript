@@ -14,8 +14,7 @@ async function getDashboardData() {
   const metrics = await db
     .select()
     .from(dailyMetrics)
-    .where(gte(dailyMetrics.date, thirtyDaysAgo))
-    .all();
+    .where(gte(dailyMetrics.date, thirtyDaysAgo));
 
   if (metrics.length === 0) {
     return {
@@ -33,11 +32,12 @@ async function getDashboardData() {
   const calculated = calculateAllMetrics(aggregated);
 
   // Count active ads
-  const activeAds = await db
+  const activeAdsResult = await db
     .select({ count: sql<number>`count(*)` })
     .from(ads)
-    .where(sql`status = 'ACTIVE'`)
-    .get();
+    .where(sql`status = 'ACTIVE'`);
+
+  const activeAds = activeAdsResult[0];
 
   return {
     totalSpend: aggregated.spend,

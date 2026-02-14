@@ -64,7 +64,7 @@ export async function recalculateBenchmarks(minSpend: number = 50) {
     })
     .from(dailyMetrics)
     .where(gte(dailyMetrics.date, thirtyDaysAgo))
-    .all();
+    ;
 
   // Group by ad and aggregate
   const adMetricsMap = new Map<string, typeof dailyMetrics.$inferSelect[]>();
@@ -169,7 +169,7 @@ export async function recalculateBenchmarks(minSpend: number = 50) {
  * Get current benchmarks from database
  */
 export async function getBenchmarks() {
-  const allBenchmarks = await db.select().from(benchmarks).all();
+  const allBenchmarks = await db.select().from(benchmarks);
 
   const benchmarkMap = allBenchmarks.reduce(
     (acc, b) => {

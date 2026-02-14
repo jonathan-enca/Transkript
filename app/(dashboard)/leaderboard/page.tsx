@@ -41,7 +41,7 @@ async function getCreativesWithMetrics(): Promise<CreativeWithMetrics[]> {
   const thirtyDaysAgo = formatDateToISO(subDays(new Date(), 30));
 
   // Get all ads
-  const allAds = await db.select().from(ads).all();
+  const allAds = await db.select().from(ads);
 
   const creativesWithMetrics: CreativeWithMetrics[] = [];
 
@@ -53,7 +53,7 @@ async function getCreativesWithMetrics(): Promise<CreativeWithMetrics[]> {
       .where(
         and(eq(dailyMetrics.adId, ad.id), gte(dailyMetrics.date, thirtyDaysAgo))
       )
-      .all();
+      ;
 
     if (metrics.length === 0) continue;
 

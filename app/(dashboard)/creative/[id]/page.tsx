@@ -11,7 +11,8 @@ import { notFound } from "next/navigation";
 
 async function getCreativeData(id: string) {
   // Get the ad
-  const ad = await db.select().from(ads).where(eq(ads.id, id)).get();
+  const adResult = await db.select().from(ads).where(eq(ads.id, id));
+  const ad = adResult[0];
 
   if (!ad) {
     return null;
@@ -23,8 +24,7 @@ async function getCreativeData(id: string) {
     .select()
     .from(dailyMetrics)
     .where(and(eq(dailyMetrics.adId, id), gte(dailyMetrics.date, thirtyDaysAgo)))
-    .orderBy(dailyMetrics.date)
-    .all();
+    .orderBy(dailyMetrics.date);
 
   const aggregated = aggregateMetrics(metrics);
   const calculated = calculateAllMetrics(aggregated);

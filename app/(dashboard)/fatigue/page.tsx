@@ -25,7 +25,7 @@ interface AdWithFatigue {
 }
 
 async function getAdsWithFatigue(): Promise<AdWithFatigue[]> {
-  const allAds = await db.select().from(ads).where(eq(ads.status, "ACTIVE")).all();
+  const allAds = await db.select().from(ads).where(eq(ads.status, "ACTIVE"));
 
   const adsWithFatigue: AdWithFatigue[] = [];
 
@@ -37,7 +37,7 @@ async function getAdsWithFatigue(): Promise<AdWithFatigue[]> {
       .select()
       .from(dailyMetrics)
       .where(and(eq(dailyMetrics.adId, ad.id), gte(dailyMetrics.date, sevenDaysAgo)))
-      .all();
+      ;
 
     const allMetrics = await db
       .select()
@@ -48,7 +48,7 @@ async function getAdsWithFatigue(): Promise<AdWithFatigue[]> {
           gte(dailyMetrics.date, fourteenDaysAgo)
         )
       )
-      .all();
+      ;
 
     const previous7Days = allMetrics.filter((m) => m.date < sevenDaysAgo);
 
