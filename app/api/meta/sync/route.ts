@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { getAds, getAdInsights } from "@/lib/meta/api";
 import { db } from "@/lib/db";
 import { ads, dailyMetrics, accounts } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { subDays } from "date-fns";
 import { formatDateToISO } from "@/lib/utils";
 
@@ -196,7 +196,12 @@ export async function POST(request: NextRequest) {
         const existingMetric = await db
           .select()
           .from(dailyMetrics)
-          .where(eq(dailyMetrics.adId, adId))
+          .where(
+            and(
+              eq(dailyMetrics.adId, adId),
+              eq(dailyMetrics.date, insight.date_start)
+            )
+          )
           .limit(1);
 
         const metricData = {
