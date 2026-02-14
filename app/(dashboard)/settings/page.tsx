@@ -1,5 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { MetaSync } from "@/components/settings/meta-sync";
 
 export default function SettingsPage() {
   return (
@@ -12,25 +13,7 @@ export default function SettingsPage() {
       </div>
 
       <div className="grid gap-6 max-w-2xl">
-        <Card>
-          <CardHeader>
-            <CardTitle>Meta Ad Account</CardTitle>
-            <CardDescription>
-              Connectez votre compte Meta pour synchroniser vos données
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium">Statut</div>
-                <div className="text-sm text-muted-foreground">
-                  Non connecté
-                </div>
-              </div>
-              <Button>Connecter</Button>
-            </div>
-          </CardContent>
-        </Card>
+        <MetaSync />
 
         <Card>
           <CardHeader>
@@ -75,26 +58,6 @@ export default function SettingsPage() {
               </div>
             </div>
             <Button>Enregistrer</Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Synchronisation</CardTitle>
-            <CardDescription>
-              Gérez la synchronisation de vos données
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium">Dernière synchronisation</div>
-                <div className="text-sm text-muted-foreground">
-                  Jamais
-                </div>
-              </div>
-              <Button variant="outline">Synchroniser maintenant</Button>
-            </div>
           </CardContent>
         </Card>
 
