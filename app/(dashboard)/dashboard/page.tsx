@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { db } from "@/lib/db";
 import { dailyMetrics, ads } from "@/lib/db/schema";
-import { sql, gte } from "drizzle-orm";
+import { sql, gte, eq, count } from "drizzle-orm";
 import { subDays } from "date-fns";
 import { formatDateToISO, formatCurrency, formatPercentage } from "@/lib/utils";
 import { aggregateMetrics, calculateAllMetrics } from "@/lib/metrics/calculated";
@@ -33,9 +33,9 @@ async function getDashboardData() {
 
   // Count active ads
   const activeAdsResult = await db
-    .select({ count: sql<number>`count(*)` })
+    .select({ count: count() })
     .from(ads)
-    .where(sql`status = 'ACTIVE'`);
+    .where(eq(ads.status, "ACTIVE"));
 
   const activeAds = activeAdsResult[0];
 
