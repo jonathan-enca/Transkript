@@ -67,8 +67,8 @@ async function getCreativesWithMetrics(): Promise<CreativeWithMetrics[]> {
 
     let spendTrend: "scaling" | "holding" | "declining" = "holding";
     if (firstHalf.length > 0 && secondHalf.length > 0) {
-      const firstHalfSpend = firstHalf.reduce((sum, m) => sum + m.spend, 0);
-      const secondHalfSpend = secondHalf.reduce((sum, m) => sum + m.spend, 0);
+      const firstHalfSpend = firstHalf.reduce((sum: number, m: any) => sum + m.spend, 0);
+      const secondHalfSpend = secondHalf.reduce((sum: number, m: any) => sum + m.spend, 0);
       const spendChange =
         firstHalfSpend > 0
           ? ((secondHalfSpend - firstHalfSpend) / firstHalfSpend) * 100

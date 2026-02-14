@@ -55,7 +55,7 @@ async function getAdsWithFatigue(): Promise<AdWithFatigue[]> {
     if (last7Days.length === 0) continue;
 
     const fatigueScore = calculateFatigueScore(last7Days, previous7Days);
-    const totalSpend = last7Days.reduce((sum, m) => sum + m.spend, 0);
+    const totalSpend = last7Days.reduce((sum: number, m: any) => sum + m.spend, 0);
 
     adsWithFatigue.push({
       id: ad.id,
