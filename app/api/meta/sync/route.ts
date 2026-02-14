@@ -74,9 +74,31 @@ export async function POST(request: NextRequest) {
     // Step 2: Store ads in database
     let adsInserted = 0;
     let adsUpdated = 0;
+    let adsSkipped = 0;
+    const adsErrors: Array<{ adId: string; error: string }> = [];
 
     for (const metaAd of metaAds) {
       try {
+        // Validate required fields
+        if (!metaAd.creative?.id) {
+          console.warn(`Skipping ad ${metaAd.id}: missing creative.id`);
+          adsSkipped++;
+          adsErrors.push({ adId: metaAd.id, error: "Missing creative.id" });
+          continue;
+        }
+        if (!metaAd.campaign?.id || !metaAd.campaign?.name) {
+          console.warn(`Skipping ad ${metaAd.id}: missing campaign data`);
+          adsSkipped++;
+          adsErrors.push({ adId: metaAd.id, error: "Missing campaign data" });
+          continue;
+        }
+        if (!metaAd.adset?.id || !metaAd.adset?.name) {
+          console.warn(`Skipping ad ${metaAd.id}: missing adset data`);
+          adsSkipped++;
+          adsErrors.push({ adId: metaAd.id, error: "Missing adset data" });
+          continue;
+        }
+
         // Extract creative data
         const creative = metaAd.creative;
         const objectStory = creative?.object_story_spec;
@@ -138,6 +160,11 @@ export async function POST(request: NextRequest) {
         }
       } catch (error) {
         console.error(`Error processing ad ${metaAd.id}:`, error);
+        adsSkipped++;
+        adsErrors.push({
+          adId: metaAd.id,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
       }
     }
 
@@ -263,7 +290,9 @@ export async function POST(request: NextRequest) {
         ads: {
           inserted: adsInserted,
           updated: adsUpdated,
+          skipped: adsSkipped,
           total: metaAds.length,
+          errors: adsErrors.length > 0 ? adsErrors : undefined,
         },
         metrics: {
           inserted: metricsInserted,

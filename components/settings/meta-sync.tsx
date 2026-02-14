@@ -18,7 +18,13 @@ interface SyncStatus {
   success: boolean | null;
   message: string;
   data?: {
-    ads: { inserted: number; updated: number; total: number };
+    ads: {
+      inserted: number;
+      updated: number;
+      skipped?: number;
+      total: number;
+      errors?: Array<{ adId: string; error: string }>;
+    };
     metrics: { inserted: number; updated: number; total: number };
   };
 }
@@ -216,6 +222,7 @@ export function MetaSync() {
                   <div className="font-medium">Annonces</div>
                   <div className="text-muted-foreground">
                     {syncStatus.data.ads.inserted} nouvelles, {syncStatus.data.ads.updated} mises à jour
+                    {syncStatus.data.ads.skipped ? `, ${syncStatus.data.ads.skipped} ignorées` : ""}
                     <br />
                     Total : {syncStatus.data.ads.total}
                   </div>
@@ -229,6 +236,26 @@ export function MetaSync() {
                   </div>
                 </div>
               </div>
+
+              {syncStatus.data.ads.errors && syncStatus.data.ads.errors.length > 0 && (
+                <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+                  <div className="font-medium text-red-800 dark:text-red-200 mb-2">
+                    ⚠️ Erreurs de synchronisation ({syncStatus.data.ads.errors.length})
+                  </div>
+                  <div className="space-y-1 text-xs text-red-700 dark:text-red-300 max-h-40 overflow-y-auto">
+                    {syncStatus.data.ads.errors.slice(0, 5).map((err, i) => (
+                      <div key={i}>
+                        Ad {err.adId}: {err.error}
+                      </div>
+                    ))}
+                    {syncStatus.data.ads.errors.length > 5 && (
+                      <div className="text-red-600 dark:text-red-400 font-medium">
+                        ... et {syncStatus.data.ads.errors.length - 5} autres erreurs
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
