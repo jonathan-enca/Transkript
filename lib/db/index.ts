@@ -8,7 +8,7 @@ import * as schema from "./schema";
 const isProduction = process.env.NODE_ENV === "production";
 const useTurso = isProduction && process.env.TURSO_DATABASE_URL;
 
-let db: ReturnType<typeof drizzleSqlite> | ReturnType<typeof drizzleLibsql>;
+let db: any;
 
 if (useTurso) {
   // Production: Use Turso (serverless SQLite)
