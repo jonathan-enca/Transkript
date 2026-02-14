@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ads, dailyMetrics, accounts } from "@/lib/db/schema";
-import { sql } from "drizzle-orm";
+import { sql, InferSelectModel } from "drizzle-orm";
+
+type Ad = InferSelectModel<typeof ads>;
+type DailyMetric = InferSelectModel<typeof dailyMetrics>;
 
 /**
  * GET /api/debug
@@ -27,14 +30,14 @@ export async function GET() {
       },
       samples: {
         accounts: sampleAccounts,
-        ads: sampleAds.map(ad => ({
+        ads: sampleAds.map((ad: Ad) => ({
           id: ad.id,
           name: ad.name,
           status: ad.status,
           campaignName: ad.campaignName,
           format: ad.format,
         })),
-        metrics: sampleMetrics.map(m => ({
+        metrics: sampleMetrics.map((m: DailyMetric) => ({
           id: m.id,
           adId: m.adId,
           date: m.date,
