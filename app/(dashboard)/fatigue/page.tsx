@@ -50,7 +50,7 @@ async function getAdsWithFatigue(): Promise<AdWithFatigue[]> {
       )
       ;
 
-    const previous7Days = allMetrics.filter((m) => m.date < sevenDaysAgo);
+    const previous7Days = allMetrics.filter((m: any) => m.date < sevenDaysAgo);
 
     if (last7Days.length === 0) continue;
 
