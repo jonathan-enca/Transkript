@@ -188,6 +188,8 @@ export async function POST(request: NextRequest) {
     // Step 4: Store insights in database
     let metricsInserted = 0;
     let metricsUpdated = 0;
+    let metricsSkipped = 0;
+    const metricsErrors: Array<{ adId: string; error: string }> = [];
 
     for (const insight of insights) {
       try {
@@ -202,6 +204,8 @@ export async function POST(request: NextRequest) {
 
         if (adExists.length === 0) {
           console.warn(`Ad ${adId} not found in database, skipping metrics`);
+          metricsSkipped++;
+          metricsErrors.push({ adId, error: "Ad not found in database" });
           continue;
         }
 
@@ -273,10 +277,15 @@ export async function POST(request: NextRequest) {
         }
       } catch (error) {
         console.error(`Error processing insight for ad ${insight.ad_id}:`, error);
+        metricsSkipped++;
+        metricsErrors.push({
+          adId: insight.ad_id,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
       }
     }
 
-    console.log(`✅ Metrics: ${metricsInserted} inserted, ${metricsUpdated} updated`);
+    console.log(`✅ Metrics: ${metricsInserted} inserted, ${metricsUpdated} updated, ${metricsSkipped} skipped`);
 
     // Update account's last sync time
     await db
@@ -297,7 +306,9 @@ export async function POST(request: NextRequest) {
         metrics: {
           inserted: metricsInserted,
           updated: metricsUpdated,
+          skipped: metricsSkipped,
           total: insights.length,
+          errors: metricsErrors.length > 0 ? metricsErrors : undefined,
         },
       },
     });
