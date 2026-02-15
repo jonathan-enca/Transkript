@@ -1,6 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MetaSync } from "@/components/settings/meta-sync";
+import { NamingConvention } from "@/components/settings/naming-convention";
 
 export default function SettingsPage() {
   return (
@@ -14,6 +15,8 @@ export default function SettingsPage() {
 
       <div className="grid gap-6 max-w-2xl">
         <MetaSync />
+
+        <NamingConvention />
 
         <Card>
           <CardHeader>
