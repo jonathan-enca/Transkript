@@ -37,9 +37,15 @@ export async function POST() {
       ON accounts (ad_account_id)
     `);
 
+    // Drop old ads table if it exists (to recreate with correct schema)
+    // This is safe because we always sync fresh data from Meta
+    console.log("🗑️ Dropping old ads table if exists...");
+    await db.run(sql`DROP TABLE IF EXISTS ads`);
+
     // Create ads table with all fields
+    console.log("📦 Creating ads table with full schema...");
     await db.run(sql`
-      CREATE TABLE IF NOT EXISTS ads (
+      CREATE TABLE ads (
         id TEXT PRIMARY KEY NOT NULL,
         account_id TEXT,
         creative_id TEXT NOT NULL,
@@ -73,17 +79,6 @@ export async function POST() {
         last_synced_at INTEGER DEFAULT (unixepoch()) NOT NULL
       )
     `);
-
-    // Migrate existing ads table - add missing columns
-    try {
-      await db.run(sql`ALTER TABLE ads ADD COLUMN account_id TEXT`);
-      console.log("✅ Added account_id column to ads table");
-    } catch (e: any) {
-      // Column already exists, ignore
-      if (!e.message?.includes("duplicate column")) {
-        console.log("⚠️ account_id column already exists or other error:", e.message);
-      }
-    }
 
     // Create daily_metrics table
     await db.run(sql`

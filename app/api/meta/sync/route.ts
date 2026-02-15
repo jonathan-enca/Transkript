@@ -86,6 +86,23 @@ export async function POST(request: NextRequest) {
 
     console.log(`🔄 Starting sync for account: ${adAccountId}`);
 
+    // Auto-run migrations to ensure schema is up to date
+    console.log("🔧 Running auto-migrations...");
+    try {
+      const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+      const migrateRes = await fetch(`${baseUrl}/api/migrate`, {
+        method: 'POST',
+      });
+      const migrateData = await migrateRes.json();
+      if (migrateData.success) {
+        console.log("✅ Auto-migration completed");
+      } else {
+        console.warn("⚠️ Auto-migration failed:", migrateData.error);
+      }
+    } catch (migrationError) {
+      console.warn("⚠️ Auto-migration error (continuing anyway):", migrationError);
+    }
+
     // Create sync log entry
     const syncLogEntry = await db.insert(syncLog).values({
       type: 'manual', // TODO: detect if initial/cron/manual
