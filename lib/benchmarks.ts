@@ -93,8 +93,8 @@ async function getMetricValues(
 
   // Extract values and filter out nulls/zeros
   const values = filteredResults
-    .map(r => r.value)
-    .filter((v): v is number => v !== null && v !== undefined && v > 0);
+    .map((r: any) => r.value)
+    .filter((v: any): v is number => v !== null && v !== undefined && v > 0);
 
   return values;
 }
