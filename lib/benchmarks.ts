@@ -85,10 +85,10 @@ async function getMetricValues(
         .select({ id: ads.id })
         .from(ads)
         .where(eq(ads.format, formatFilter))
-      ).map(a => a.id)
+      ).map((a: { id: string }) => a.id)
     );
 
-    filteredResults = results.filter(r => adIds.has(r.adId));
+    filteredResults = results.filter((r: any) => adIds.has(r.adId));
   }
 
   // Extract values and filter out nulls/zeros
