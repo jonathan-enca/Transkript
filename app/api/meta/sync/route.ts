@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getAds, getAdInsights, getAdById } from "@/lib/meta/api";
+import { getAllAds, getAdInsights, getAdById } from "@/lib/meta/api";
 import { db } from "@/lib/db";
 import { ads, dailyMetrics, accounts, syncLog } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
@@ -120,9 +120,9 @@ export async function POST(request: NextRequest) {
         console.log(`📝 Using naming convention: ${namingConvention.pattern}`);
       }
 
-      // Step 1: Fetch latest 100 ads from Meta
-    console.log("📥 Fetching latest 100 ads from Meta...");
-    const metaAds = await getAds(adAccountId, session.accessToken, 100);
+      // Step 1: Fetch ALL ads from Meta (with pagination)
+    console.log("📥 Fetching ALL ads from Meta (this may take a while)...");
+    const metaAds = await getAllAds(adAccountId, session.accessToken);
     console.log(`✅ Fetched ${metaAds.length} ads`);
 
     // Step 2: Store ads in database
@@ -234,10 +234,21 @@ export async function POST(request: NextRequest) {
 
     console.log(`✅ Ads: ${adsInserted} inserted, ${adsUpdated} updated`);
 
-    // Step 3: Fetch insights for last N days
-    console.log(`📊 Fetching insights for last ${daysBack} days...`);
-    const dateFrom = formatDateToISO(subDays(new Date(), daysBack)).split("T")[0];
+    // Step 3: Fetch insights (incremental)
+    // If first sync: fetch last 30 days
+    // If incremental sync: fetch since last sync
+    let dateFrom: string;
     const dateTo = formatDateToISO(new Date()).split("T")[0];
+
+    if (!account.lastSyncAt) {
+      // First sync: fetch last 30 days
+      dateFrom = formatDateToISO(subDays(new Date(), 30)).split("T")[0];
+      console.log(`📊 First sync - fetching insights for last 30 days (${dateFrom} to ${dateTo})...`);
+    } else {
+      // Incremental sync: fetch since last sync
+      dateFrom = formatDateToISO(account.lastSyncAt).split("T")[0];
+      console.log(`📊 Incremental sync - fetching insights since last sync (${dateFrom} to ${dateTo})...`);
+    }
 
     const insights = await getAdInsights(
       adAccountId,

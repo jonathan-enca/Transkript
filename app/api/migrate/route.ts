@@ -12,6 +12,20 @@ export async function POST() {
   try {
     console.log("🚀 Running database migrations...");
 
+    // Check schema version to avoid data loss
+    let schemaVersion = 0;
+    try {
+      const versionResult = await db.run(sql`
+        SELECT value FROM user_settings WHERE key = 'schema_version'
+      `);
+      schemaVersion = parseInt((versionResult as any).rows?.[0]?.value || "0");
+    } catch {
+      // Table doesn't exist yet, this is first migration
+      schemaVersion = 0;
+    }
+
+    console.log(`📊 Current schema version: ${schemaVersion}`);
+
     // Create accounts table (keep existing data)
     await db.run(sql`
       CREATE TABLE IF NOT EXISTS accounts (
@@ -37,15 +51,19 @@ export async function POST() {
       ON accounts (ad_account_id)
     `);
 
-    // Drop old ads table if it exists (to recreate with correct schema)
-    // This is safe because we always sync fresh data from Meta
-    console.log("🗑️ Dropping old ads table if exists...");
-    await db.run(sql`DROP TABLE IF EXISTS ads`);
+    // Only DROP tables on first migration (schema_version = 0)
+    // After that, we keep historical data
+    if (schemaVersion === 0) {
+      console.log("🔄 First migration - recreating tables with correct schema...");
 
-    // Create ads table with all fields
-    console.log("📦 Creating ads table with full schema...");
-    await db.run(sql`
-      CREATE TABLE ads (
+      // Drop old ads table if it exists (to recreate with correct schema)
+      console.log("🗑️ Dropping old ads table if exists...");
+      await db.run(sql`DROP TABLE IF EXISTS ads`);
+
+      // Create ads table with all fields
+      console.log("📦 Creating ads table with full schema...");
+      await db.run(sql`
+        CREATE TABLE ads (
         id TEXT PRIMARY KEY NOT NULL,
         account_id TEXT,
         creative_id TEXT NOT NULL,
@@ -80,14 +98,14 @@ export async function POST() {
       )
     `);
 
-    // Drop old daily_metrics table if it exists (to recreate with correct schema)
-    console.log("🗑️ Dropping old daily_metrics table if exists...");
-    await db.run(sql`DROP TABLE IF EXISTS daily_metrics`);
+      // Drop old daily_metrics table if it exists (to recreate with correct schema)
+      console.log("🗑️ Dropping old daily_metrics table if exists...");
+      await db.run(sql`DROP TABLE IF EXISTS daily_metrics`);
 
-    // Create daily_metrics table
-    console.log("📦 Creating daily_metrics table with full schema...");
-    await db.run(sql`
-      CREATE TABLE daily_metrics (
+      // Create daily_metrics table
+      console.log("📦 Creating daily_metrics table with full schema...");
+      await db.run(sql`
+        CREATE TABLE daily_metrics (
         id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
         ad_id TEXT NOT NULL,
         date TEXT NOT NULL,
@@ -132,24 +150,24 @@ export async function POST() {
       )
     `);
 
-    // Drop and recreate all other tables to ensure schema is up to date
-    console.log("🗑️ Dropping old tables if they exist...");
-    await db.run(sql`DROP TABLE IF EXISTS benchmarks`);
-    await db.run(sql`DROP TABLE IF EXISTS sync_log`);
-    await db.run(sql`DROP TABLE IF EXISTS user_settings`);
-    await db.run(sql`DROP TABLE IF EXISTS ad_concepts`);
-    await db.run(sql`DROP TABLE IF EXISTS concept_metrics`);
-    await db.run(sql`DROP TABLE IF EXISTS concepts`);
-    await db.run(sql`DROP TABLE IF EXISTS account_daily_metrics`);
-    await db.run(sql`DROP TABLE IF EXISTS campaign_daily_metrics`);
-    await db.run(sql`DROP TABLE IF EXISTS adset_daily_metrics`);
-    await db.run(sql`DROP TABLE IF EXISTS budget_targets`);
-    await db.run(sql`DROP TABLE IF EXISTS daily_recommendations`);
+      // Drop and recreate all other tables to ensure schema is up to date
+      // (except user_settings which stores schema version)
+      console.log("🗑️ Dropping old tables if they exist...");
+      await db.run(sql`DROP TABLE IF EXISTS benchmarks`);
+      await db.run(sql`DROP TABLE IF EXISTS sync_log`);
+      await db.run(sql`DROP TABLE IF EXISTS ad_concepts`);
+      await db.run(sql`DROP TABLE IF EXISTS concept_metrics`);
+      await db.run(sql`DROP TABLE IF EXISTS concepts`);
+      await db.run(sql`DROP TABLE IF EXISTS account_daily_metrics`);
+      await db.run(sql`DROP TABLE IF EXISTS campaign_daily_metrics`);
+      await db.run(sql`DROP TABLE IF EXISTS adset_daily_metrics`);
+      await db.run(sql`DROP TABLE IF EXISTS budget_targets`);
+      await db.run(sql`DROP TABLE IF EXISTS daily_recommendations`);
 
-    // Create benchmarks table
-    console.log("📦 Creating all remaining tables...");
-    await db.run(sql`
-      CREATE TABLE benchmarks (
+      // Create benchmarks table
+      console.log("📦 Creating all remaining tables...");
+      await db.run(sql`
+        CREATE TABLE benchmarks (
         id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
         metric_name TEXT NOT NULL,
         period TEXT DEFAULT 'last_30d' NOT NULL,
@@ -176,15 +194,6 @@ export async function POST() {
         days_synced INTEGER DEFAULT 0,
         errors TEXT,
         status TEXT NOT NULL
-      )
-    `);
-
-    // Create user_settings table
-    await db.run(sql`
-      CREATE TABLE user_settings (
-        key TEXT PRIMARY KEY NOT NULL,
-        value TEXT NOT NULL,
-        updated_at INTEGER DEFAULT (unixepoch()) NOT NULL
       )
     `);
 
@@ -374,13 +383,42 @@ export async function POST() {
         status TEXT DEFAULT 'pending' NOT NULL,
         created_at INTEGER DEFAULT (unixepoch()) NOT NULL
       )
-    `);
+      `);
+
+      // Set schema version to 1 after first successful migration
+      await db.run(sql`
+        CREATE TABLE IF NOT EXISTS user_settings (
+          key TEXT PRIMARY KEY NOT NULL,
+          value TEXT NOT NULL,
+          updated_at INTEGER DEFAULT (unixepoch()) NOT NULL
+        )
+      `);
+
+      await db.run(sql`
+        INSERT OR REPLACE INTO user_settings (key, value, updated_at)
+        VALUES ('schema_version', '1', unixepoch())
+      `);
+
+      console.log("✅ First migration completed - schema version set to 1");
+    } else {
+      // Schema version >= 1: Tables already exist with correct schema
+      // Just ensure user_settings table exists for future use
+      await db.run(sql`
+        CREATE TABLE IF NOT EXISTS user_settings (
+          key TEXT PRIMARY KEY NOT NULL,
+          value TEXT NOT NULL,
+          updated_at INTEGER DEFAULT (unixepoch()) NOT NULL
+        )
+      `);
+
+      console.log("✅ Schema version ${schemaVersion} - tables already exist, skipping recreation");
+    }
 
     console.log("✅ All migrations completed successfully");
 
     return NextResponse.json({
       success: true,
-      message: "Database migrations completed successfully - all tables created",
+      message: `Database migrations completed successfully (schema v${schemaVersion === 0 ? 1 : schemaVersion})`,
     });
   } catch (error) {
     console.error("❌ Migration error:", error);
