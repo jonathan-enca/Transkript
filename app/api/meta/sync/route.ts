@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
       console.log("🤖 Cron job sync request");
     } else if (session?.accessToken) {
       // User session authentication
-      accessToken = accessToken;
+      accessToken = session.accessToken;
       console.log("👤 Manual sync request");
     }
 
