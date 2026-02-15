@@ -32,55 +32,46 @@ export async function POST() {
       )
     `);
 
-    // Create unique index on ad_account_id
     await db.run(sql`
       CREATE UNIQUE INDEX IF NOT EXISTS accounts_ad_account_id_unique
       ON accounts (ad_account_id)
     `);
 
-    // Create ads table
+    // Create ads table with all fields
     await db.run(sql`
       CREATE TABLE IF NOT EXISTS ads (
         id TEXT PRIMARY KEY NOT NULL,
+        account_id TEXT,
         creative_id TEXT NOT NULL,
         name TEXT NOT NULL,
         format TEXT NOT NULL,
         thumbnail_url TEXT,
         video_url TEXT,
         image_url TEXT,
+        video_duration_seconds INTEGER,
         headline TEXT,
         body TEXT,
         call_to_action TEXT,
         campaign_id TEXT NOT NULL,
         campaign_name TEXT NOT NULL,
+        campaign_objective TEXT,
         adset_id TEXT NOT NULL,
         adset_name TEXT NOT NULL,
         status TEXT NOT NULL,
         created_time INTEGER NOT NULL,
         updated_time INTEGER NOT NULL,
+        first_spend_date TEXT,
+        last_active_date TEXT,
+        days_active INTEGER DEFAULT 0,
+        total_spend REAL DEFAULT 0,
+        tag_concept TEXT,
+        tag_hook TEXT,
+        tag_format TEXT,
+        tag_offer TEXT,
+        tag_creator TEXT,
+        tag_language TEXT,
         last_synced_at INTEGER DEFAULT (unixepoch()) NOT NULL
       )
-    `);
-
-    // Create benchmarks table
-    await db.run(sql`
-      CREATE TABLE IF NOT EXISTS benchmarks (
-        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-        metric_name TEXT NOT NULL,
-        p10 REAL NOT NULL,
-        p25 REAL NOT NULL,
-        p50 REAL NOT NULL,
-        p75 REAL NOT NULL,
-        p90 REAL NOT NULL,
-        computed_at INTEGER DEFAULT (unixepoch()) NOT NULL,
-        sample_size INTEGER NOT NULL
-      )
-    `);
-
-    // Create unique index on metric_name
-    await db.run(sql`
-      CREATE UNIQUE INDEX IF NOT EXISTS benchmarks_metric_name_unique
-      ON benchmarks (metric_name)
     `);
 
     // Create daily_metrics table
@@ -114,6 +105,15 @@ export async function POST() {
         purchase_value REAL DEFAULT 0 NOT NULL,
         cost_per_purchase REAL DEFAULT 0 NOT NULL,
         purchase_roas REAL DEFAULT 0 NOT NULL,
+        add_to_cart INTEGER DEFAULT 0,
+        initiate_checkout INTEGER DEFAULT 0,
+        hook_rate REAL DEFAULT 0,
+        hold_rate REAL DEFAULT 0,
+        quality_ranking TEXT,
+        engagement_rate_ranking TEXT,
+        conversion_rate_ranking TEXT,
+        breakdown_platform TEXT,
+        breakdown_placement TEXT,
         placement TEXT,
         platform TEXT,
         synced_at INTEGER DEFAULT (unixepoch()) NOT NULL,
@@ -121,11 +121,240 @@ export async function POST() {
       )
     `);
 
+    // Create benchmarks table
+    await db.run(sql`
+      CREATE TABLE IF NOT EXISTS benchmarks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+        metric_name TEXT NOT NULL,
+        period TEXT DEFAULT 'last_30d' NOT NULL,
+        format_filter TEXT DEFAULT 'all' NOT NULL,
+        p10 REAL NOT NULL,
+        p25 REAL NOT NULL,
+        p50 REAL NOT NULL,
+        p75 REAL NOT NULL,
+        p90 REAL NOT NULL,
+        mean REAL NOT NULL,
+        computed_at INTEGER DEFAULT (unixepoch()) NOT NULL,
+        sample_size INTEGER NOT NULL
+      )
+    `);
+
+    // Create sync_log table
+    await db.run(sql`
+      CREATE TABLE IF NOT EXISTS sync_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+        type TEXT NOT NULL,
+        started_at INTEGER NOT NULL,
+        completed_at INTEGER,
+        ads_synced INTEGER DEFAULT 0,
+        days_synced INTEGER DEFAULT 0,
+        errors TEXT,
+        status TEXT NOT NULL
+      )
+    `);
+
+    // Create user_settings table
+    await db.run(sql`
+      CREATE TABLE IF NOT EXISTS user_settings (
+        key TEXT PRIMARY KEY NOT NULL,
+        value TEXT NOT NULL,
+        updated_at INTEGER DEFAULT (unixepoch()) NOT NULL
+      )
+    `);
+
+    // Create concepts table
+    await db.run(sql`
+      CREATE TABLE IF NOT EXISTS concepts (
+        id TEXT PRIMARY KEY NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        grouping_method TEXT NOT NULL,
+        concept_key TEXT,
+        representative_ad_id TEXT,
+        thumbnail_url TEXT,
+        first_launch_date TEXT,
+        status TEXT NOT NULL,
+        created_at INTEGER DEFAULT (unixepoch()) NOT NULL,
+        updated_at INTEGER DEFAULT (unixepoch()) NOT NULL
+      )
+    `);
+
+    // Create ad_concepts junction table
+    await db.run(sql`
+      CREATE TABLE IF NOT EXISTS ad_concepts (
+        ad_id TEXT NOT NULL,
+        concept_id TEXT NOT NULL,
+        is_manual_override INTEGER DEFAULT 0,
+        variation_label TEXT,
+        PRIMARY KEY (ad_id, concept_id),
+        FOREIGN KEY (ad_id) REFERENCES ads(id) ON DELETE CASCADE,
+        FOREIGN KEY (concept_id) REFERENCES concepts(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Create concept_metrics table
+    await db.run(sql`
+      CREATE TABLE IF NOT EXISTS concept_metrics (
+        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+        concept_id TEXT NOT NULL,
+        date TEXT NOT NULL,
+        total_spend REAL DEFAULT 0,
+        total_impressions INTEGER DEFAULT 0,
+        total_clicks INTEGER DEFAULT 0,
+        total_outbound_clicks INTEGER DEFAULT 0,
+        total_purchases INTEGER DEFAULT 0,
+        total_purchase_value REAL DEFAULT 0,
+        total_video_3s_views INTEGER DEFAULT 0,
+        total_video_thruplay INTEGER DEFAULT 0,
+        avg_cpa REAL DEFAULT 0,
+        avg_roas REAL DEFAULT 0,
+        avg_ctr REAL DEFAULT 0,
+        avg_cpm REAL DEFAULT 0,
+        avg_hook_rate REAL DEFAULT 0,
+        avg_hold_rate REAL DEFAULT 0,
+        active_ads_count INTEGER DEFAULT 0,
+        total_ads_count INTEGER DEFAULT 0,
+        FOREIGN KEY (concept_id) REFERENCES concepts(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Create account_daily_metrics table
+    await db.run(sql`
+      CREATE TABLE IF NOT EXISTS account_daily_metrics (
+        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+        account_id TEXT NOT NULL,
+        date TEXT NOT NULL,
+        spend REAL DEFAULT 0,
+        impressions INTEGER DEFAULT 0,
+        reach INTEGER DEFAULT 0,
+        frequency REAL DEFAULT 0,
+        clicks INTEGER DEFAULT 0,
+        unique_clicks INTEGER DEFAULT 0,
+        cpc REAL DEFAULT 0,
+        cpm REAL DEFAULT 0,
+        ctr REAL DEFAULT 0,
+        outbound_clicks INTEGER DEFAULT 0,
+        outbound_ctr REAL DEFAULT 0,
+        link_clicks INTEGER DEFAULT 0,
+        view_content INTEGER DEFAULT 0,
+        view_content_value REAL DEFAULT 0,
+        add_to_cart INTEGER DEFAULT 0,
+        add_to_cart_value REAL DEFAULT 0,
+        initiate_checkout INTEGER DEFAULT 0,
+        initiate_checkout_value REAL DEFAULT 0,
+        purchases INTEGER DEFAULT 0,
+        purchase_value REAL DEFAULT 0,
+        roas REAL DEFAULT 0,
+        cpa REAL DEFAULT 0,
+        cost_per_atc REAL DEFAULT 0,
+        cost_per_ic REAL DEFAULT 0,
+        atc_rate REAL DEFAULT 0,
+        ic_rate REAL DEFAULT 0,
+        purchase_rate REAL DEFAULT 0,
+        click_to_purchase_rate REAL DEFAULT 0,
+        aov REAL DEFAULT 0
+      )
+    `);
+
+    // Create campaign_daily_metrics table
+    await db.run(sql`
+      CREATE TABLE IF NOT EXISTS campaign_daily_metrics (
+        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+        campaign_id TEXT NOT NULL,
+        campaign_name TEXT NOT NULL,
+        campaign_objective TEXT,
+        account_id TEXT NOT NULL,
+        date TEXT NOT NULL,
+        spend REAL DEFAULT 0,
+        impressions INTEGER DEFAULT 0,
+        reach INTEGER DEFAULT 0,
+        frequency REAL DEFAULT 0,
+        clicks INTEGER DEFAULT 0,
+        cpc REAL DEFAULT 0,
+        cpm REAL DEFAULT 0,
+        ctr REAL DEFAULT 0,
+        outbound_clicks INTEGER DEFAULT 0,
+        view_content INTEGER DEFAULT 0,
+        add_to_cart INTEGER DEFAULT 0,
+        initiate_checkout INTEGER DEFAULT 0,
+        purchases INTEGER DEFAULT 0,
+        purchase_value REAL DEFAULT 0,
+        roas REAL DEFAULT 0,
+        cpa REAL DEFAULT 0,
+        aov REAL DEFAULT 0,
+        status TEXT NOT NULL,
+        funnel_stage TEXT
+      )
+    `);
+
+    // Create adset_daily_metrics table
+    await db.run(sql`
+      CREATE TABLE IF NOT EXISTS adset_daily_metrics (
+        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+        adset_id TEXT NOT NULL,
+        adset_name TEXT NOT NULL,
+        campaign_id TEXT NOT NULL,
+        account_id TEXT NOT NULL,
+        date TEXT NOT NULL,
+        spend REAL DEFAULT 0,
+        impressions INTEGER DEFAULT 0,
+        reach INTEGER DEFAULT 0,
+        frequency REAL DEFAULT 0,
+        cpc REAL DEFAULT 0,
+        cpm REAL DEFAULT 0,
+        ctr REAL DEFAULT 0,
+        purchases INTEGER DEFAULT 0,
+        purchase_value REAL DEFAULT 0,
+        roas REAL DEFAULT 0,
+        cpa REAL DEFAULT 0,
+        status TEXT NOT NULL,
+        daily_budget REAL,
+        bid_strategy TEXT,
+        optimization_goal TEXT,
+        age_gender_breakdown TEXT
+      )
+    `);
+
+    // Create budget_targets table
+    await db.run(sql`
+      CREATE TABLE IF NOT EXISTS budget_targets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+        account_id TEXT NOT NULL,
+        period_type TEXT NOT NULL,
+        period_start TEXT NOT NULL,
+        period_end TEXT NOT NULL,
+        target_spend REAL NOT NULL,
+        target_roas REAL,
+        target_cpa REAL,
+        target_purchases INTEGER,
+        notes TEXT
+      )
+    `);
+
+    // Create daily_recommendations table
+    await db.run(sql`
+      CREATE TABLE IF NOT EXISTS daily_recommendations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+        account_id TEXT NOT NULL,
+        date TEXT NOT NULL,
+        type TEXT NOT NULL,
+        priority TEXT NOT NULL,
+        entity_type TEXT NOT NULL,
+        entity_id TEXT,
+        entity_name TEXT,
+        title TEXT NOT NULL,
+        description TEXT NOT NULL,
+        data_points TEXT,
+        status TEXT DEFAULT 'pending' NOT NULL,
+        created_at INTEGER DEFAULT (unixepoch()) NOT NULL
+      )
+    `);
+
     console.log("✅ All migrations completed successfully");
 
     return NextResponse.json({
       success: true,
-      message: "Database migrations completed successfully",
+      message: "Database migrations completed successfully - all tables created",
     });
   } catch (error) {
     console.error("❌ Migration error:", error);
