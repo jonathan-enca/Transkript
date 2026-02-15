@@ -8,6 +8,7 @@ import { eq, and } from "drizzle-orm";
 import { subDays } from "date-fns";
 import { formatDateToISO } from "@/lib/utils";
 import { getNamingConvention, parseAdName } from "@/lib/naming-convention";
+import { calculateAllBenchmarks } from "@/lib/benchmarks";
 
 /**
  * Helper to safely parse float values and handle Infinity/NaN
@@ -464,6 +465,16 @@ export async function POST(request: NextRequest) {
       .update(accounts)
       .set({ lastSyncAt: new Date() })
       .where(eq(accounts.id, account.id));
+
+    // Step 6: Calculate benchmarks
+    console.log("📊 Calculating benchmarks...");
+    try {
+      const benchmarksCalculated = await calculateAllBenchmarks();
+      console.log(`✅ Calculated ${benchmarksCalculated} benchmarks`);
+    } catch (benchmarkError) {
+      console.error("⚠️  Benchmark calculation failed (non-fatal):", benchmarkError);
+      // Don't fail the sync if benchmarks fail
+    }
 
     // Finalize sync log
     await db
