@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getAds, getAllAds, getAdInsights } from "@/lib/meta/api";
+import { getAds, getAdInsights } from "@/lib/meta/api";
 import { db } from "@/lib/db";
 import { ads, dailyMetrics, accounts } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
@@ -66,10 +66,10 @@ export async function POST(request: NextRequest) {
 
     console.log(`🔄 Starting sync for account: ${adAccountId}`);
 
-    // Step 1: Fetch ALL ads from Meta (with pagination)
-    console.log("📥 Fetching all ads from Meta (with pagination)...");
-    const metaAds = await getAllAds(adAccountId, session.accessToken);
-    console.log(`✅ Fetched ${metaAds.length} total ads`);
+    // Step 1: Fetch latest 100 ads from Meta
+    console.log("📥 Fetching latest 100 ads from Meta...");
+    const metaAds = await getAds(adAccountId, session.accessToken, 100);
+    console.log(`✅ Fetched ${metaAds.length} ads`);
 
     // Step 2: Store ads in database
     let adsInserted = 0;
@@ -189,6 +189,7 @@ export async function POST(request: NextRequest) {
     let metricsInserted = 0;
     let metricsUpdated = 0;
     let metricsSkipped = 0;
+    let adsAutoCreated = 0;
     const metricsErrors: Array<{ adId: string; error: string }> = [];
 
     for (const insight of insights) {
@@ -203,10 +204,37 @@ export async function POST(request: NextRequest) {
           .limit(1);
 
         if (adExists.length === 0) {
-          console.warn(`Ad ${adId} not found in database, skipping metrics`);
-          metricsSkipped++;
-          metricsErrors.push({ adId, error: "Ad not found in database" });
-          continue;
+          // Auto-create ad with minimal data from insights
+          console.log(`📝 Auto-creating ad ${adId} from insights`);
+          try {
+            await db.insert(ads).values({
+              id: adId,
+              creativeId: `creative_${adId}`, // Placeholder
+              name: `Ad ${adId}`, // Placeholder name
+              format: "unknown",
+              thumbnailUrl: null,
+              headline: null,
+              body: null,
+              callToAction: null,
+              campaignId: "unknown",
+              campaignName: "Unknown Campaign",
+              adsetId: "unknown",
+              adsetName: "Unknown AdSet",
+              status: "UNKNOWN",
+              createdTime: new Date(insight.date_start),
+              updatedTime: new Date(insight.date_start),
+              lastSyncedAt: new Date(),
+            });
+            adsAutoCreated++;
+          } catch (createError) {
+            console.error(`Failed to auto-create ad ${adId}:`, createError);
+            metricsSkipped++;
+            metricsErrors.push({
+              adId,
+              error: `Auto-create failed: ${createError instanceof Error ? createError.message : 'Unknown error'}`
+            });
+            continue;
+          }
         }
 
         // Parse metrics
@@ -286,6 +314,9 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`✅ Metrics: ${metricsInserted} inserted, ${metricsUpdated} updated, ${metricsSkipped} skipped`);
+    if (adsAutoCreated > 0) {
+      console.log(`📝 Auto-created ${adsAutoCreated} ads from insights`);
+    }
 
     // Update account's last sync time
     await db
@@ -300,6 +331,7 @@ export async function POST(request: NextRequest) {
           inserted: adsInserted,
           updated: adsUpdated,
           skipped: adsSkipped,
+          autoCreated: adsAutoCreated,
           total: metaAds.length,
           errors: adsErrors.length > 0 ? adsErrors : undefined,
         },

@@ -22,6 +22,7 @@ interface SyncStatus {
       inserted: number;
       updated: number;
       skipped?: number;
+      autoCreated?: number;
       total: number;
       errors?: Array<{ adId: string; error: string }>;
     };
@@ -229,6 +230,7 @@ export function MetaSync() {
                   <div className="text-muted-foreground">
                     {syncStatus.data.ads.inserted} nouvelles, {syncStatus.data.ads.updated} mises à jour
                     {syncStatus.data.ads.skipped ? `, ${syncStatus.data.ads.skipped} ignorées` : ""}
+                    {syncStatus.data.ads.autoCreated ? `, ${syncStatus.data.ads.autoCreated} auto-créées` : ""}
                     <br />
                     Total : {syncStatus.data.ads.total}
                   </div>
