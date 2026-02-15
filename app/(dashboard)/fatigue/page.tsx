@@ -15,6 +15,10 @@ import { subDays } from "date-fns";
 import { formatDateToISO, formatCurrency, getFatigueColor, getFatigueStatus } from "@/lib/utils";
 import { calculateFatigueScore } from "@/lib/metrics/calculated";
 
+// Force dynamic rendering to avoid build timeout
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 interface AdWithFatigue {
   id: string;
   name: string;
@@ -25,32 +29,32 @@ interface AdWithFatigue {
 }
 
 async function getAdsWithFatigue(): Promise<AdWithFatigue[]> {
+  const sevenDaysAgo = formatDateToISO(subDays(new Date(), 7));
+  const fourteenDaysAgo = formatDateToISO(subDays(new Date(), 14));
+
+  // Get all active ads and their metrics in TWO queries (optimized)
   const allAds = await db.select().from(ads).where(eq(ads.status, "ACTIVE"));
+  const allMetrics = await db
+    .select()
+    .from(dailyMetrics)
+    .where(gte(dailyMetrics.date, fourteenDaysAgo));
+
+  // Group metrics by adId for fast lookup
+  const metricsByAdId = new Map<string, typeof allMetrics>();
+  for (const metric of allMetrics) {
+    if (!metricsByAdId.has(metric.adId)) {
+      metricsByAdId.set(metric.adId, []);
+    }
+    metricsByAdId.get(metric.adId)!.push(metric);
+  }
 
   const adsWithFatigue: AdWithFatigue[] = [];
 
   for (const ad of allAds) {
-    const sevenDaysAgo = formatDateToISO(subDays(new Date(), 7));
-    const fourteenDaysAgo = formatDateToISO(subDays(new Date(), 14));
+    const adMetrics = metricsByAdId.get(ad.id) || [];
 
-    const last7Days = await db
-      .select()
-      .from(dailyMetrics)
-      .where(and(eq(dailyMetrics.adId, ad.id), gte(dailyMetrics.date, sevenDaysAgo)))
-      ;
-
-    const allMetrics = await db
-      .select()
-      .from(dailyMetrics)
-      .where(
-        and(
-          eq(dailyMetrics.adId, ad.id),
-          gte(dailyMetrics.date, fourteenDaysAgo)
-        )
-      )
-      ;
-
-    const previous7Days = allMetrics.filter((m: any) => m.date < sevenDaysAgo);
+    const last7Days = adMetrics.filter((m: any) => m.date >= sevenDaysAgo);
+    const previous7Days = adMetrics.filter((m: any) => m.date < sevenDaysAgo);
 
     if (last7Days.length === 0) continue;
 

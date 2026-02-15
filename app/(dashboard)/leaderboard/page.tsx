@@ -6,6 +6,10 @@ import { formatDateToISO } from "@/lib/utils";
 import { aggregateMetrics, calculateAllMetrics } from "@/lib/metrics/calculated";
 import { CreativeLeaderboard } from "@/components/leaderboard/creative-leaderboard";
 
+// Force dynamic rendering to avoid build timeout
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export interface CreativeWithMetrics {
   id: string;
   name: string;
@@ -40,21 +44,26 @@ export interface CreativeWithMetrics {
 async function getCreativesWithMetrics(): Promise<CreativeWithMetrics[]> {
   const thirtyDaysAgo = formatDateToISO(subDays(new Date(), 30));
 
-  // Get all ads
+  // Get all ads with their metrics in ONE query (optimized JOIN)
   const allAds = await db.select().from(ads);
+  const allMetrics = await db
+    .select()
+    .from(dailyMetrics)
+    .where(gte(dailyMetrics.date, thirtyDaysAgo));
+
+  // Group metrics by adId for fast lookup
+  const metricsByAdId = new Map<string, typeof allMetrics>();
+  for (const metric of allMetrics) {
+    if (!metricsByAdId.has(metric.adId)) {
+      metricsByAdId.set(metric.adId, []);
+    }
+    metricsByAdId.get(metric.adId)!.push(metric);
+  }
 
   const creativesWithMetrics: CreativeWithMetrics[] = [];
 
   for (const ad of allAds) {
-    // Get metrics for this ad
-    const metrics = await db
-      .select()
-      .from(dailyMetrics)
-      .where(
-        and(eq(dailyMetrics.adId, ad.id), gte(dailyMetrics.date, thirtyDaysAgo))
-      )
-      ;
-
+    const metrics = metricsByAdId.get(ad.id) || [];
     if (metrics.length === 0) continue;
 
     const aggregated = aggregateMetrics(metrics);
