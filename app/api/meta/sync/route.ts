@@ -3,10 +3,11 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAds, getAdInsights, getAdById } from "@/lib/meta/api";
 import { db } from "@/lib/db";
-import { ads, dailyMetrics, accounts } from "@/lib/db/schema";
+import { ads, dailyMetrics, accounts, syncLog } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { subDays } from "date-fns";
 import { formatDateToISO } from "@/lib/utils";
+import { getNamingConvention, parseAdName } from "@/lib/naming-convention";
 
 /**
  * Helper to safely parse float values and handle Infinity/NaN
@@ -84,7 +85,24 @@ export async function POST(request: NextRequest) {
 
     console.log(`🔄 Starting sync for account: ${adAccountId}`);
 
-    // Step 1: Fetch latest 100 ads from Meta
+    // Create sync log entry
+    const syncLogEntry = await db.insert(syncLog).values({
+      type: 'manual', // TODO: detect if initial/cron/manual
+      startedAt: new Date(),
+      status: 'running',
+      adsSynced: 0,
+      daysSynced: daysBack,
+    }).returning();
+    const syncId = syncLogEntry[0].id;
+
+    try {
+      // Load naming convention if configured
+      const namingConvention = await getNamingConvention(db);
+      if (namingConvention) {
+        console.log(`📝 Using naming convention: ${namingConvention.pattern}`);
+      }
+
+      // Step 1: Fetch latest 100 ads from Meta
     console.log("📥 Fetching latest 100 ads from Meta...");
     const metaAds = await getAds(adAccountId, session.accessToken, 100);
     console.log(`✅ Fetched ${metaAds.length} ads`);
@@ -133,6 +151,11 @@ export async function POST(request: NextRequest) {
         const body = videoData?.link_description || linkData?.description;
         const callToAction = videoData?.call_to_action?.type || linkData?.call_to_action?.type;
 
+        // Parse tags from ad name if naming convention is configured
+        const parsedTags = namingConvention
+          ? parseAdName(metaAd.name, namingConvention)
+          : {};
+
         // Check if ad exists
         const existingAd = await db
           .select()
@@ -144,6 +167,7 @@ export async function POST(request: NextRequest) {
           // Insert new ad
           await db.insert(ads).values({
             id: metaAd.id,
+            accountId: adAccountId,
             creativeId: metaAd.creative.id,
             name: metaAd.name,
             format,
@@ -160,6 +184,8 @@ export async function POST(request: NextRequest) {
             status: metaAd.status,
             createdTime: new Date(metaAd.created_time),
             updatedTime: new Date(metaAd.updated_time),
+            // Tags from naming convention
+            ...parsedTags,
             lastSyncedAt: new Date(),
           });
           adsInserted++;
@@ -171,6 +197,8 @@ export async function POST(request: NextRequest) {
               name: metaAd.name,
               status: metaAd.status,
               updatedTime: new Date(metaAd.updated_time),
+              // Update tags if naming convention is configured
+              ...(namingConvention ? parsedTags : {}),
               lastSyncedAt: new Date(),
             })
             .where(eq(ads.id, metaAd.id));
@@ -260,8 +288,14 @@ export async function POST(request: NextRequest) {
               callToAction = linkData.call_to_action?.type || null;
             }
 
+            // Parse tags from ad name
+            const parsedTags = namingConvention
+              ? parseAdName(metaAd.name, namingConvention)
+              : {};
+
             await db.insert(ads).values({
               id: metaAd.id,
+              accountId: adAccountId,
               creativeId: metaAd.creative?.id || `creative_${adId}`,
               name: metaAd.name,
               format,
@@ -278,6 +312,8 @@ export async function POST(request: NextRequest) {
               status: metaAd.status || "UNKNOWN",
               createdTime: new Date(metaAd.created_time),
               updatedTime: new Date(metaAd.updated_time),
+              // Tags from naming convention
+              ...parsedTags,
               lastSyncedAt: new Date(),
             });
             adsAutoCreated++;
@@ -293,12 +329,15 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Parse metrics
+        // Parse metrics - Conversion funnel
         const purchases = insight.actions?.find(a => a.action_type === "purchase")?.value || "0";
         const purchaseValue = insight.action_values?.find(a => a.action_type === "purchase")?.value || "0";
         const costPerPurchase = insight.cost_per_action_type?.find(a => a.action_type === "purchase")?.value || "0";
         const purchaseRoas = insight.purchase_roas?.find(a => a.action_type === "purchase")?.value || "0";
+        const addToCart = insight.actions?.find(a => a.action_type === "add_to_cart")?.value || "0";
+        const initiateCheckout = insight.actions?.find(a => a.action_type === "initiate_checkout")?.value || "0";
 
+        // Parse metrics - Video
         const video3sViews = insight.actions?.find(a => a.action_type === "video_view")?.value || "0";
         const video25Pct = insight.video_p25_watched_actions?.[0]?.value || "0";
         const video50Pct = insight.video_p50_watched_actions?.[0]?.value || "0";
@@ -306,6 +345,13 @@ export async function POST(request: NextRequest) {
         const video100Pct = insight.video_p100_watched_actions?.[0]?.value || "0";
         const videoThruPlays = insight.video_thruplay_watched_actions?.[0]?.value || "0";
         const videoAvgTime = insight.video_avg_time_watched_actions?.[0]?.value || "0";
+
+        // Calculate hook rate and hold rate
+        const impressions = safeParseInt(insight.impressions);
+        const video3s = safeParseInt(video3sViews);
+        const thruPlays = safeParseInt(videoThruPlays);
+        const hookRate = impressions > 0 ? (video3s / impressions) * 100 : 0;
+        const holdRate = video3s > 0 ? (thruPlays / video3s) * 100 : 0;
 
         // Check if metric exists for this ad and date
         const existingMetric = await db
@@ -323,7 +369,7 @@ export async function POST(request: NextRequest) {
           adId,
           date: insight.date_start,
           spend: safeParseFloat(insight.spend),
-          impressions: safeParseInt(insight.impressions),
+          impressions,
           reach: safeParseInt(insight.reach),
           frequency: safeParseFloat(insight.frequency),
           clicks: safeParseInt(insight.clicks),
@@ -335,17 +381,22 @@ export async function POST(request: NextRequest) {
           costPerOutboundClick: safeParseFloat(insight.cost_per_outbound_click),
           inlineLinkClicks: safeParseInt(insight.inline_link_clicks),
           inlineLinkClickCtr: safeParseFloat(insight.inline_link_click_ctr),
-          video3sViews: safeParseInt(video3sViews),
+          video3sViews: video3s,
           video25Pct: safeParseInt(video25Pct),
           video50Pct: safeParseInt(video50Pct),
           video75Pct: safeParseInt(video75Pct),
           video100Pct: safeParseInt(video100Pct),
-          videoThruPlays: safeParseInt(videoThruPlays),
+          videoThruPlays: thruPlays,
           videoAvgTimeWatched: safeParseFloat(videoAvgTime),
           purchases: safeParseInt(purchases),
           purchaseValue: safeParseFloat(purchaseValue),
           costPerPurchase: safeParseFloat(costPerPurchase),
           purchaseRoas: safeParseFloat(purchaseRoas),
+          addToCart: safeParseInt(addToCart),
+          initiateCheckout: safeParseInt(initiateCheckout),
+          // Calculated metrics
+          hookRate: safeParseFloat(hookRate.toFixed(2)),
+          holdRate: safeParseFloat(holdRate.toFixed(2)),
           syncedAt: new Date(),
         };
 
@@ -374,11 +425,58 @@ export async function POST(request: NextRequest) {
       console.log(`📝 Auto-created ${adsAutoCreated} ads from insights`);
     }
 
+    // Step 5: Calculate ad activity stats (first_spend_date, last_active_date, days_active, total_spend)
+    console.log("📊 Calculating ad activity stats...");
+    const allAds = await db.select({ id: ads.id }).from(ads);
+
+    for (const ad of allAds) {
+      const adMetrics = await db
+        .select({
+          date: dailyMetrics.date,
+          spend: dailyMetrics.spend,
+        })
+        .from(dailyMetrics)
+        .where(eq(dailyMetrics.adId, ad.id))
+        .orderBy(dailyMetrics.date);
+
+      const metricsWithSpend = adMetrics.filter(m => m.spend > 0);
+
+      if (metricsWithSpend.length > 0) {
+        const firstSpendDate = metricsWithSpend[0].date;
+        const lastActiveDate = metricsWithSpend[metricsWithSpend.length - 1].date;
+        const daysActive = metricsWithSpend.length;
+        const totalSpend = metricsWithSpend.reduce((sum, m) => sum + m.spend, 0);
+
+        await db
+          .update(ads)
+          .set({
+            firstSpendDate,
+            lastActiveDate,
+            daysActive,
+            totalSpend,
+          })
+          .where(eq(ads.id, ad.id));
+      }
+    }
+
     // Update account's last sync time
     await db
       .update(accounts)
       .set({ lastSyncAt: new Date() })
       .where(eq(accounts.id, account.id));
+
+    // Finalize sync log
+    await db
+      .update(syncLog)
+      .set({
+        completedAt: new Date(),
+        status: 'success',
+        adsSynced: adsInserted + adsUpdated,
+        errors: metricsErrors.length > 0 ? JSON.stringify(metricsErrors.slice(0, 10)) : null, // Store first 10 errors
+      })
+      .where(eq(syncLog.id, syncId));
+
+    console.log(`✅ Sync completed successfully`);
 
     return NextResponse.json({
       success: true,
@@ -400,6 +498,19 @@ export async function POST(request: NextRequest) {
         },
       },
     });
+    } catch (syncError) {
+      // Update sync log with failure
+      await db
+        .update(syncLog)
+        .set({
+          completedAt: new Date(),
+          status: 'failed',
+          errors: JSON.stringify([{ error: syncError instanceof Error ? syncError.message : 'Unknown error' }]),
+        })
+        .where(eq(syncLog.id, syncId));
+
+      throw syncError;
+    }
   } catch (error) {
     console.error("Sync error:", error);
     return NextResponse.json(
