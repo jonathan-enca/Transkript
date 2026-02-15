@@ -74,6 +74,17 @@ export async function POST() {
       )
     `);
 
+    // Migrate existing ads table - add missing columns
+    try {
+      await db.run(sql`ALTER TABLE ads ADD COLUMN account_id TEXT`);
+      console.log("✅ Added account_id column to ads table");
+    } catch (e: any) {
+      // Column already exists, ignore
+      if (!e.message?.includes("duplicate column")) {
+        console.log("⚠️ account_id column already exists or other error:", e.message);
+      }
+    }
+
     // Create daily_metrics table
     await db.run(sql`
       CREATE TABLE IF NOT EXISTS daily_metrics (
