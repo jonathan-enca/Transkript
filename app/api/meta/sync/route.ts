@@ -34,9 +34,26 @@ function safeParseInt(value: string | undefined | null, defaultValue = 0): numbe
  */
 export async function POST(request: NextRequest) {
   try {
+    // Support both session auth (manual sync) and header auth (cron job)
     const session = await getServerSession(authOptions);
+    const headerToken = request.headers.get("X-Account-Token");
+    const headerAccountId = request.headers.get("X-Account-Id");
 
-    if (!session?.accessToken) {
+    let accessToken: string | null = null;
+    let isCronJob = false;
+
+    if (headerToken && headerAccountId) {
+      // Cron job authentication
+      accessToken = headerToken;
+      isCronJob = true;
+      console.log("🤖 Cron job sync request");
+    } else if (session?.accessToken) {
+      // User session authentication
+      accessToken = accessToken;
+      console.log("👤 Manual sync request");
+    }
+
+    if (!accessToken) {
       return NextResponse.json(
         { error: "Not authenticated" },
         { status: 401 }
@@ -44,7 +61,8 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { adAccountId, daysBack = 30 } = body;
+    const { adAccountId: bodyAccountId, daysBack = 30 } = body;
+    const adAccountId = bodyAccountId || headerAccountId;
 
     if (!adAccountId) {
       return NextResponse.json(
@@ -64,19 +82,19 @@ export async function POST(request: NextRequest) {
     if (existingAccount.length === 0) {
       // Create new account
       const newAccount = await db.insert(accounts).values({
-        userId: session.user?.email || "default",
+        userId: session?.user?.email || "cron",
         adAccountId,
         adAccountName: adAccountId,
-        accessToken: session.accessToken,
+        accessToken: accessToken,
         tokenExpiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000), // 60 days
       }).returning();
       account = newAccount[0];
     } else {
-      // Update access token
+      // Update access token (skip if cron job - use existing token)
       const updated = await db
         .update(accounts)
         .set({
-          accessToken: session.accessToken,
+          accessToken: isCronJob ? existingAccount[0].accessToken : accessToken,
           updatedAt: new Date(),
         })
         .where(eq(accounts.adAccountId, adAccountId))
@@ -122,7 +140,7 @@ export async function POST(request: NextRequest) {
 
       // Step 1: Fetch ALL ads from Meta (with pagination)
     console.log("📥 Fetching ALL ads from Meta (this may take a while)...");
-    const metaAds = await getAllAds(adAccountId, session.accessToken);
+    const metaAds = await getAllAds(adAccountId, accessToken);
     console.log(`✅ Fetched ${metaAds.length} ads`);
 
     // Step 2: Store ads in database
@@ -252,7 +270,7 @@ export async function POST(request: NextRequest) {
 
     const insights = await getAdInsights(
       adAccountId,
-      session.accessToken,
+      accessToken,
       dateFrom,
       dateTo,
       "ad"
@@ -282,7 +300,7 @@ export async function POST(request: NextRequest) {
           // Auto-create ad with FULL data from Meta API
           console.log(`📝 Auto-creating ad ${adId} - fetching from Meta API`);
           try {
-            const metaAd = await getAdById(adId, session.accessToken);
+            const metaAd = await getAdById(adId, accessToken);
 
             if (!metaAd) {
               console.error(`Failed to fetch ad ${adId} from Meta API`);
