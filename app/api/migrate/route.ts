@@ -12,7 +12,7 @@ export async function POST() {
   try {
     console.log("🚀 Running database migrations...");
 
-    // Create accounts table
+    // Create accounts table (keep existing data)
     await db.run(sql`
       CREATE TABLE IF NOT EXISTS accounts (
         id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -80,9 +80,14 @@ export async function POST() {
       )
     `);
 
+    // Drop old daily_metrics table if it exists (to recreate with correct schema)
+    console.log("🗑️ Dropping old daily_metrics table if exists...");
+    await db.run(sql`DROP TABLE IF EXISTS daily_metrics`);
+
     // Create daily_metrics table
+    console.log("📦 Creating daily_metrics table with full schema...");
     await db.run(sql`
-      CREATE TABLE IF NOT EXISTS daily_metrics (
+      CREATE TABLE daily_metrics (
         id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
         ad_id TEXT NOT NULL,
         date TEXT NOT NULL,
@@ -127,9 +132,24 @@ export async function POST() {
       )
     `);
 
+    // Drop and recreate all other tables to ensure schema is up to date
+    console.log("🗑️ Dropping old tables if they exist...");
+    await db.run(sql`DROP TABLE IF EXISTS benchmarks`);
+    await db.run(sql`DROP TABLE IF EXISTS sync_log`);
+    await db.run(sql`DROP TABLE IF EXISTS user_settings`);
+    await db.run(sql`DROP TABLE IF EXISTS ad_concepts`);
+    await db.run(sql`DROP TABLE IF EXISTS concept_metrics`);
+    await db.run(sql`DROP TABLE IF EXISTS concepts`);
+    await db.run(sql`DROP TABLE IF EXISTS account_daily_metrics`);
+    await db.run(sql`DROP TABLE IF EXISTS campaign_daily_metrics`);
+    await db.run(sql`DROP TABLE IF EXISTS adset_daily_metrics`);
+    await db.run(sql`DROP TABLE IF EXISTS budget_targets`);
+    await db.run(sql`DROP TABLE IF EXISTS daily_recommendations`);
+
     // Create benchmarks table
+    console.log("📦 Creating all remaining tables...");
     await db.run(sql`
-      CREATE TABLE IF NOT EXISTS benchmarks (
+      CREATE TABLE benchmarks (
         id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
         metric_name TEXT NOT NULL,
         period TEXT DEFAULT 'last_30d' NOT NULL,
@@ -147,7 +167,7 @@ export async function POST() {
 
     // Create sync_log table
     await db.run(sql`
-      CREATE TABLE IF NOT EXISTS sync_log (
+      CREATE TABLE sync_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
         type TEXT NOT NULL,
         started_at INTEGER NOT NULL,
@@ -161,7 +181,7 @@ export async function POST() {
 
     // Create user_settings table
     await db.run(sql`
-      CREATE TABLE IF NOT EXISTS user_settings (
+      CREATE TABLE user_settings (
         key TEXT PRIMARY KEY NOT NULL,
         value TEXT NOT NULL,
         updated_at INTEGER DEFAULT (unixepoch()) NOT NULL
@@ -170,7 +190,7 @@ export async function POST() {
 
     // Create concepts table
     await db.run(sql`
-      CREATE TABLE IF NOT EXISTS concepts (
+      CREATE TABLE concepts (
         id TEXT PRIMARY KEY NOT NULL,
         name TEXT NOT NULL,
         description TEXT,
@@ -187,7 +207,7 @@ export async function POST() {
 
     // Create ad_concepts junction table
     await db.run(sql`
-      CREATE TABLE IF NOT EXISTS ad_concepts (
+      CREATE TABLE ad_concepts (
         ad_id TEXT NOT NULL,
         concept_id TEXT NOT NULL,
         is_manual_override INTEGER DEFAULT 0,
@@ -200,7 +220,7 @@ export async function POST() {
 
     // Create concept_metrics table
     await db.run(sql`
-      CREATE TABLE IF NOT EXISTS concept_metrics (
+      CREATE TABLE concept_metrics (
         id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
         concept_id TEXT NOT NULL,
         date TEXT NOT NULL,
@@ -226,7 +246,7 @@ export async function POST() {
 
     // Create account_daily_metrics table
     await db.run(sql`
-      CREATE TABLE IF NOT EXISTS account_daily_metrics (
+      CREATE TABLE account_daily_metrics (
         id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
         account_id TEXT NOT NULL,
         date TEXT NOT NULL,
@@ -264,7 +284,7 @@ export async function POST() {
 
     // Create campaign_daily_metrics table
     await db.run(sql`
-      CREATE TABLE IF NOT EXISTS campaign_daily_metrics (
+      CREATE TABLE campaign_daily_metrics (
         id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
         campaign_id TEXT NOT NULL,
         campaign_name TEXT NOT NULL,
@@ -295,7 +315,7 @@ export async function POST() {
 
     // Create adset_daily_metrics table
     await db.run(sql`
-      CREATE TABLE IF NOT EXISTS adset_daily_metrics (
+      CREATE TABLE adset_daily_metrics (
         id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
         adset_id TEXT NOT NULL,
         adset_name TEXT NOT NULL,
@@ -323,7 +343,7 @@ export async function POST() {
 
     // Create budget_targets table
     await db.run(sql`
-      CREATE TABLE IF NOT EXISTS budget_targets (
+      CREATE TABLE budget_targets (
         id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
         account_id TEXT NOT NULL,
         period_type TEXT NOT NULL,
@@ -339,7 +359,7 @@ export async function POST() {
 
     // Create daily_recommendations table
     await db.run(sql`
-      CREATE TABLE IF NOT EXISTS daily_recommendations (
+      CREATE TABLE daily_recommendations (
         id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
         account_id TEXT NOT NULL,
         date TEXT NOT NULL,
