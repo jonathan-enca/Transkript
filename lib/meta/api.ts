@@ -133,7 +133,7 @@ export async function getAdAccounts(accessToken: string): Promise<MetaAdAccount[
 }
 
 /**
- * Fetch ads from an ad account
+ * Fetch ads from an ad account (single page)
  */
 export async function getAds(
   adAccountId: string,
@@ -162,6 +162,50 @@ export async function getAds(
 
   const data = await response.json();
   return data.data || [];
+}
+
+/**
+ * Fetch ALL ads from an ad account (with pagination)
+ */
+export async function getAllAds(
+  adAccountId: string,
+  accessToken: string,
+  pageSize = 100
+): Promise<MetaAd[]> {
+  const fields = [
+    'id',
+    'name',
+    'status',
+    'created_time',
+    'updated_time',
+    'creative{id,name,thumbnail_url,object_story_spec}',
+    'adset{id,name}',
+    'campaign{id,name}'
+  ].join(',');
+
+  let allAds: MetaAd[] = [];
+  let nextPageUrl: string | null = `${META_API_BASE}/${adAccountId}/ads?fields=${fields}&limit=${pageSize}&access_token=${accessToken}`;
+
+  while (nextPageUrl) {
+    const response = await fetch(nextPageUrl);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(`Meta API Error: ${error.error?.message || 'Unknown error'}`);
+    }
+
+    const data = await response.json();
+    const pageAds = data.data || [];
+    allAds = allAds.concat(pageAds);
+
+    // Check if there's a next page
+    nextPageUrl = data.paging?.next || null;
+
+    // Log progress
+    console.log(`📥 Fetched ${allAds.length} ads so far...`);
+  }
+
+  return allAds;
 }
 
 /**

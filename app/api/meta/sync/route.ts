@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getAds, getAdInsights } from "@/lib/meta/api";
+import { getAds, getAllAds, getAdInsights } from "@/lib/meta/api";
 import { db } from "@/lib/db";
 import { ads, dailyMetrics, accounts } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
@@ -66,10 +66,10 @@ export async function POST(request: NextRequest) {
 
     console.log(`🔄 Starting sync for account: ${adAccountId}`);
 
-    // Step 1: Fetch ads from Meta
-    console.log("📥 Fetching ads from Meta...");
-    const metaAds = await getAds(adAccountId, session.accessToken);
-    console.log(`✅ Fetched ${metaAds.length} ads`);
+    // Step 1: Fetch ALL ads from Meta (with pagination)
+    console.log("📥 Fetching all ads from Meta (with pagination)...");
+    const metaAds = await getAllAds(adAccountId, session.accessToken);
+    console.log(`✅ Fetched ${metaAds.length} total ads`);
 
     // Step 2: Store ads in database
     let adsInserted = 0;
