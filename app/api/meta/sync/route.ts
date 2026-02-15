@@ -440,13 +440,13 @@ export async function POST(request: NextRequest) {
         .where(eq(dailyMetrics.adId, ad.id))
         .orderBy(dailyMetrics.date);
 
-      const metricsWithSpend = adMetrics.filter(m => m.spend > 0);
+      const metricsWithSpend = adMetrics.filter((m: { date: string; spend: number }) => m.spend > 0);
 
       if (metricsWithSpend.length > 0) {
         const firstSpendDate = metricsWithSpend[0].date;
         const lastActiveDate = metricsWithSpend[metricsWithSpend.length - 1].date;
         const daysActive = metricsWithSpend.length;
-        const totalSpend = metricsWithSpend.reduce((sum, m) => sum + m.spend, 0);
+        const totalSpend = metricsWithSpend.reduce((sum: number, m: { spend: number }) => sum + m.spend, 0);
 
         await db
           .update(ads)
