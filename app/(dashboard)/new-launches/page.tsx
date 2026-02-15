@@ -33,9 +33,13 @@ async function getNewLaunches(): Promise<CreativeWithMetrics[]> {
   const newLaunches: CreativeWithMetrics[] = [];
 
   for (const ad of recentAds) {
-    // Filter by first spend date (if available) or created time
-    const firstSpendDate = ad.firstSpendDate || formatDateToISO(ad.createdTime);
-    if (firstSpendDate < fourteenDaysAgo) continue;
+    // Filter by first spend date (must have spent in last 14 days)
+    // If no firstSpendDate, skip this ad
+    if (!ad.firstSpendDate) continue;
+
+    // firstSpendDate is "YYYY-MM-DD" string, fourteenDaysAgo is also "YYYY-MM-DD"
+    // Include only if firstSpendDate >= fourteenDaysAgo (started spending in last 14 days)
+    if (ad.firstSpendDate < fourteenDaysAgo) continue;
 
     const metrics = metricsByAdId.get(ad.id) || [];
     if (metrics.length === 0) continue; // Skip ads with no data yet

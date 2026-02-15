@@ -78,7 +78,7 @@ async function getTopCreatives(): Promise<CreativeWithMetrics[]> {
 
   // Filter creatives with minimum spend and sort by ROAS
   return creativesWithMetrics
-    .filter((c) => c.spend >= 50) // Minimum 50€ spend
+    .filter((c) => c.spend >= 10) // Minimum 10€ spend (lowered for better visibility)
     .sort((a, b) => b.roas - a.roas)
     .slice(0, 50); // Top 50
 }

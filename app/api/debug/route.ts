@@ -37,6 +37,31 @@ export async function GET() {
       .orderBy(sql`date DESC`)
       .limit(10);
 
+    // Get spend per ad (to debug why only 4 creatives show)
+    const spendPerAd = await db.select({
+      adId: dailyMetrics.adId,
+      totalSpend: sql<number>`SUM(${dailyMetrics.spend})`,
+    }).from(dailyMetrics)
+      .groupBy(dailyMetrics.adId)
+      .orderBy(sql`SUM(${dailyMetrics.spend}) DESC`)
+      .limit(20);
+
+    // Get ad statuses
+    const adsByStatus = await db.select({
+      status: ads.status,
+      count: sql<number>`count(*)`,
+    }).from(ads)
+      .groupBy(ads.status);
+
+    // Get ads with firstSpendDate info
+    const adsWithSpendInfo = await db.select({
+      id: ads.id,
+      name: ads.name,
+      firstSpendDate: ads.firstSpendDate,
+      createdTime: ads.createdTime,
+      status: ads.status,
+    }).from(ads).limit(10);
+
     return NextResponse.json({
       counts: {
         accounts: accountsCount[0]?.count || 0,
@@ -45,6 +70,9 @@ export async function GET() {
       },
       dateRange: dateRange[0] || null,
       metricsByDate,
+      spendPerAd,
+      adsByStatus,
+      adsWithSpendInfo,
       samples: {
         accounts: sampleAccounts,
         ads: sampleAds.map((ad: Ad) => ({

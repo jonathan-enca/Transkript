@@ -2,6 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { MetaSync } from "@/components/settings/meta-sync";
 import { NamingConvention } from "@/components/settings/naming-convention";
+import { BenchmarkTargets } from "@/components/settings/benchmark-targets";
 
 export default function SettingsPage() {
   return (
@@ -18,51 +19,7 @@ export default function SettingsPage() {
 
         <NamingConvention />
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Benchmarks Cibles</CardTitle>
-            <CardDescription>
-              Définissez vos objectifs de performance
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium">Hook Rate Cible (%)</label>
-                <input
-                  type="number"
-                  className="w-full mt-1 px-3 py-2 border rounded-md"
-                  defaultValue={30}
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">ROAS Cible</label>
-                <input
-                  type="number"
-                  className="w-full mt-1 px-3 py-2 border rounded-md"
-                  defaultValue={3}
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">CPA Max (€)</label>
-                <input
-                  type="number"
-                  className="w-full mt-1 px-3 py-2 border rounded-md"
-                  defaultValue={30}
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Devise</label>
-                <select className="w-full mt-1 px-3 py-2 border rounded-md">
-                  <option>EUR</option>
-                  <option>USD</option>
-                  <option>GBP</option>
-                </select>
-              </div>
-            </div>
-            <Button>Enregistrer</Button>
-          </CardContent>
-        </Card>
+        <BenchmarkTargets />
 
         <Card>
           <CardHeader>
