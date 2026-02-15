@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getAds, getAdInsights } from "@/lib/meta/api";
+import { getAds, getAdInsights, getAdById } from "@/lib/meta/api";
 import { db } from "@/lib/db";
 import { ads, dailyMetrics, accounts } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
@@ -222,28 +222,66 @@ export async function POST(request: NextRequest) {
           .limit(1);
 
         if (adExists.length === 0) {
-          // Auto-create ad with minimal data from insights
-          console.log(`📝 Auto-creating ad ${adId} from insights`);
+          // Auto-create ad with FULL data from Meta API
+          console.log(`📝 Auto-creating ad ${adId} - fetching from Meta API`);
           try {
+            const metaAd = await getAdById(adId, session.accessToken);
+
+            if (!metaAd) {
+              console.error(`Failed to fetch ad ${adId} from Meta API`);
+              metricsSkipped++;
+              metricsErrors.push({
+                adId,
+                error: 'Could not fetch ad details from Meta API'
+              });
+              continue;
+            }
+
+            // Determine format from creative
+            let format = "image";
+            let videoUrl = null;
+            let imageUrl = null;
+            let headline = null;
+            let body = null;
+            let callToAction = null;
+
+            const videoData = metaAd.creative?.object_story_spec?.video_data;
+            const linkData = metaAd.creative?.object_story_spec?.link_data;
+
+            if (videoData) {
+              format = "video";
+              videoUrl = videoData.video_id || null;
+              body = videoData.message || null;
+              headline = videoData.link_description || null;
+              callToAction = videoData.call_to_action?.type || null;
+            } else if (linkData) {
+              body = linkData.message || null;
+              headline = linkData.name || null;
+              callToAction = linkData.call_to_action?.type || null;
+            }
+
             await db.insert(ads).values({
-              id: adId,
-              creativeId: `creative_${adId}`, // Placeholder
-              name: `Ad ${adId}`, // Placeholder name
-              format: "unknown",
-              thumbnailUrl: null,
-              headline: null,
-              body: null,
-              callToAction: null,
-              campaignId: "unknown",
-              campaignName: "Unknown Campaign",
-              adsetId: "unknown",
-              adsetName: "Unknown AdSet",
-              status: "UNKNOWN",
-              createdTime: new Date(insight.date_start),
-              updatedTime: new Date(insight.date_start),
+              id: metaAd.id,
+              creativeId: metaAd.creative?.id || `creative_${adId}`,
+              name: metaAd.name,
+              format,
+              thumbnailUrl: metaAd.creative?.thumbnail_url || null,
+              videoUrl,
+              imageUrl,
+              headline,
+              body,
+              callToAction,
+              campaignId: metaAd.campaign?.id || "unknown",
+              campaignName: metaAd.campaign?.name || "Unknown Campaign",
+              adsetId: metaAd.adset?.id || "unknown",
+              adsetName: metaAd.adset?.name || "Unknown AdSet",
+              status: metaAd.status || "UNKNOWN",
+              createdTime: new Date(metaAd.created_time),
+              updatedTime: new Date(metaAd.updated_time),
               lastSyncedAt: new Date(),
             });
             adsAutoCreated++;
+            console.log(`✅ Auto-created ad ${adId}: "${metaAd.name}"`);
           } catch (createError) {
             console.error(`Failed to auto-create ad ${adId}:`, createError);
             metricsSkipped++;

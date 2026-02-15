@@ -209,6 +209,42 @@ export async function getAllAds(
 }
 
 /**
+ * Fetch a single ad by ID with full details
+ */
+export async function getAdById(
+  adId: string,
+  accessToken: string
+): Promise<MetaAd | null> {
+  const fields = [
+    'id',
+    'name',
+    'status',
+    'created_time',
+    'updated_time',
+    'creative{id,name,thumbnail_url,object_story_spec}',
+    'adset{id,name}',
+    'campaign{id,name}'
+  ].join(',');
+
+  const url = `${META_API_BASE}/${adId}?fields=${fields}&access_token=${accessToken}`;
+
+  try {
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      console.error(`Failed to fetch ad ${adId}`);
+      return null;
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error(`Error fetching ad ${adId}:`, error);
+    return null;
+  }
+}
+
+/**
  * Fetch insights for ads
  */
 export async function getAdInsights(
