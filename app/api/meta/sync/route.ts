@@ -9,6 +9,24 @@ import { subDays } from "date-fns";
 import { formatDateToISO } from "@/lib/utils";
 
 /**
+ * Helper to safely parse float values and handle Infinity/NaN
+ */
+function safeParseFloat(value: string | undefined | null, defaultValue = 0): number {
+  if (!value) return defaultValue;
+  const parsed = parseFloat(value);
+  return isFinite(parsed) ? parsed : defaultValue;
+}
+
+/**
+ * Helper to safely parse int values and handle NaN
+ */
+function safeParseInt(value: string | undefined | null, defaultValue = 0): number {
+  if (!value) return defaultValue;
+  const parsed = parseInt(value);
+  return isFinite(parsed) ? parsed : defaultValue;
+}
+
+/**
  * POST /api/meta/sync
  * Synchronize ads and metrics from Meta Ads API
  */
@@ -266,30 +284,30 @@ export async function POST(request: NextRequest) {
         const metricData = {
           adId,
           date: insight.date_start,
-          spend: parseFloat(insight.spend || "0"),
-          impressions: parseInt(insight.impressions || "0"),
-          reach: parseInt(insight.reach || "0"),
-          frequency: parseFloat(insight.frequency || "0"),
-          clicks: parseInt(insight.clicks || "0"),
-          cpc: parseFloat(insight.cpc || "0"),
-          ctr: parseFloat(insight.ctr || "0"),
-          cpm: parseFloat(insight.cpm || "0"),
-          outboundClicks: parseInt(insight.outbound_clicks || "0"),
-          outboundClicksCtr: parseFloat(insight.outbound_clicks_ctr || "0"),
-          costPerOutboundClick: parseFloat(insight.cost_per_outbound_click || "0"),
-          inlineLinkClicks: parseInt(insight.inline_link_clicks || "0"),
-          inlineLinkClickCtr: parseFloat(insight.inline_link_click_ctr || "0"),
-          video3sViews: parseInt(video3sViews),
-          video25Pct: parseInt(video25Pct),
-          video50Pct: parseInt(video50Pct),
-          video75Pct: parseInt(video75Pct),
-          video100Pct: parseInt(video100Pct),
-          videoThruPlays: parseInt(videoThruPlays),
-          videoAvgTimeWatched: parseFloat(videoAvgTime),
-          purchases: parseInt(purchases),
-          purchaseValue: parseFloat(purchaseValue),
-          costPerPurchase: parseFloat(costPerPurchase),
-          purchaseRoas: parseFloat(purchaseRoas),
+          spend: safeParseFloat(insight.spend),
+          impressions: safeParseInt(insight.impressions),
+          reach: safeParseInt(insight.reach),
+          frequency: safeParseFloat(insight.frequency),
+          clicks: safeParseInt(insight.clicks),
+          cpc: safeParseFloat(insight.cpc),
+          ctr: safeParseFloat(insight.ctr),
+          cpm: safeParseFloat(insight.cpm),
+          outboundClicks: safeParseInt(insight.outbound_clicks),
+          outboundClicksCtr: safeParseFloat(insight.outbound_clicks_ctr),
+          costPerOutboundClick: safeParseFloat(insight.cost_per_outbound_click),
+          inlineLinkClicks: safeParseInt(insight.inline_link_clicks),
+          inlineLinkClickCtr: safeParseFloat(insight.inline_link_click_ctr),
+          video3sViews: safeParseInt(video3sViews),
+          video25Pct: safeParseInt(video25Pct),
+          video50Pct: safeParseInt(video50Pct),
+          video75Pct: safeParseInt(video75Pct),
+          video100Pct: safeParseInt(video100Pct),
+          videoThruPlays: safeParseInt(videoThruPlays),
+          videoAvgTimeWatched: safeParseFloat(videoAvgTime),
+          purchases: safeParseInt(purchases),
+          purchaseValue: safeParseFloat(purchaseValue),
+          costPerPurchase: safeParseFloat(costPerPurchase),
+          purchaseRoas: safeParseFloat(purchaseRoas),
           syncedAt: new Date(),
         };
 
