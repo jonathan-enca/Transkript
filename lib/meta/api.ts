@@ -187,7 +187,7 @@ export async function getAllAds(
   let nextPageUrl: string | null = `${META_API_BASE}/${adAccountId}/ads?fields=${fields}&limit=${pageSize}&access_token=${accessToken}`;
 
   while (nextPageUrl) {
-    const response = await fetch(nextPageUrl);
+    const response: Response = await fetch(nextPageUrl);
 
     if (!response.ok) {
       const error = await response.json();
